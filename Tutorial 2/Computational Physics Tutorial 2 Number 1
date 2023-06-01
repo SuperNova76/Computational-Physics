@@ -1,0 +1,122 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy as sp
+from scipy.optimize import minimize
+from scipy.optimize import curve_fit
+
+bin_edge = np.linspace(1,10,10)    ## x range which is basically the bins
+counts = np.array([1, 3, 6, 4, 6, 8, 1, 0, 1, 0])   ## Number of counts per bin
+xs = np.linspace(0,10,1000)
+bins = range(0,11)
+b_width = 1
+S = 20
+B = 1
+mu = 5
+sigma = 2
+
+#################################################################################################
+#1a) defining the likelihood function and determining the likelihood with S=20,mu=5,sigma=2 & B=1 
+#################################################################################################
+
+def N_i(x,S,mean,std,B):         ## Defining a function for the probabilities of a guassian distribution
+    Ni = S*(1/(np.sqrt(2*np.pi*(std)**2)))*np.exp(-((x-mean)**2)/(2*(std)**2)) + B*b_width
+    return Ni
+
+fx = N_i(bin_edge,S,mu,sigma,B)
+
+def likely_h(S,mu,std,B,x,y):
+    Ni = S*((1/(np.sqrt(2*np.pi*(std)**2)))*(np.exp(-((x-mu)**2)/(2*(std)**2)))) + B*(b_width) ## probability for each measurement
+    P = (Ni**(y))*np.exp(-Ni)/sp.special.factorial(y)   ## Assuming a finite binwidth, we use the Poisson Distribution
+    lkhd = np.prod(P)           ## Multiply all the probabilities to get the likelyhood
+    return lkhd
+
+L = likely_h(S,mu,sigma,B,bin_edge,counts) 
+print('The likelihood of S = 20, mu = 5, sigma = 2 and B = 1 is: ', L) #Not likely to be close to fit parameters
+
+
+#################################################################################################
+#1b) determining the parameters for the maximum likelihood and computing the maximum likelihood
+#################################################################################################
+
+# Define the histogram data
+counts = np.array([1, 3, 6, 4, 6, 8, 1, 0, 1, 0])
+centers = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+xdata = centers
+ydata = counts
+
+# Define initial guess for the parameters
+params_guess = [20, 5, 2, 1]
+
+# Fit the model to the data
+popt, pcov = curve_fit(N_i, xdata, ydata, p0=params_guess)
+print(popt)
+
+# Print the best-fit parameters
+print("Best-fit parameters:")
+print("S =", popt[0])
+print("mu =", popt[1])
+print("sigma =", popt[2])
+print("B =", popt[3])
+
+# Calculate the likelihood for the best-fit parameters
+ll = likely_h(popt[0], popt[1], popt[2], popt[3], counts, centers)
+print("Likelihood:", ll)
+
+# Plot the histogram and the best-fit model
+plt.fill_between(bins, np.concatenate(([0],counts)), step="pre" ,label = ' Measured Data')
+plt.plot(xs, N_i(xs, *popt), 'r-', label='Best-fit')
+plt.legend()
+plt.ylim(0)
+plt.ylabel('Counts')
+plt.xlabel('x')
+plt.title('Plot showing how the best fit matches the measured data')
+plt.show()
+
+#################################################################################################
+#1c) Visualising the uncertainty in the neighbourhood of the best fit
+#################################################################################################
+
+def chi(S,mu,sig,B):
+    error = np.sum((counts-N_i(bin_edge, S, mu, sig, B))**2)
+    return error
+
+S_var = np.linspace(0,25,100)
+u_var = np.linspace(0,10,100)
+sig_var = np.linspace(0.5,4,100)
+B_var = np.linspace(0,20,100)
+contour1 = np.zeros((len(S_var),len(u_var)))
+
+# Contour Plot for The signal strength vs the mean so we keep both sigma and B constant as best-fit parameters
+for ia,a in enumerate(S_var):
+    for ib,b in enumerate(u_var):
+        contour1[ib,ia] = chi(a, b, popt[2], popt[3])
+
+plt.contourf(u_var,S_var,contour1)
+plt.xlabel("$\mu$")
+plt.ylabel("S")
+plt.title("Contour plot that shows the uncertainty around the signal strength S as function of the mean $\mu$")
+plt.show()
+
+# Contour Plot for The sigma vs the mean so we keep both signal strength and B constant as best-fit parameters
+contour2 = np.zeros((len(sig_var),len(u_var)))
+for ia,a in enumerate(sig_var):
+    for ib,b in enumerate(u_var):
+        contour2[ib,ia] = chi(popt[0], b, a, popt[3])
+
+plt.contourf(u_var,sig_var,contour2)
+plt.xlabel("$\mu$")
+plt.ylabel("$\sigma$")
+plt.title("Contour plot that shows the uncertainty around the standard deviation $\sigma$ as function of the mean $\mu$")
+plt.show()
+
+# Contour Plot for The background vs the mean so we keep both signal strength and sigma as best-fit parameters
+contour3 = np.zeros((len(B_var),len(u_var)))
+for ia,a in enumerate(B_var):
+    for ib,b in enumerate(u_var):
+        contour3[ib,ia] = chi(popt[0], b, popt[2], a)
+
+plt.contourf(u_var,B_var,contour3)
+plt.xlabel("$\mu$")
+plt.ylabel("Background")
+plt.title("Contour plot that shows the uncertainty around the background B as function of the mean $\mu$")
+plt.show()

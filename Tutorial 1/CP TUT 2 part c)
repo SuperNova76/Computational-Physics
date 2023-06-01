@@ -1,0 +1,107 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from numpy.fft import fft, ifft
+
+
+cell_n = 500           # cells
+l = 5                  # m
+dx = l/cell_n          # segmenting the circuit 
+
+C = 100e-12 * dx       # F
+Ri =  50 + 0j          # Ohm
+G = 1e9 * dx           # Ohm
+R = 30e-6 * dx         # Ohm
+L = 270e-9 * dx        # H
+Rl = 100                # Ohm
+U0 = 100               # V
+tau = 5e-9             # Decay time
+
+f = 100e6
+omega = 2*(np.pi)*f
+
+###########################################################################
+###         Voltages of the different components of the circuit         ###
+###########################################################################
+LI = L*omega*(1j)
+CI = 1/(omega*C*(1j))
+
+# Impendence for the components connected in series #
+LR = LI + R
+
+# Impendence for the components connected in parallel #
+GC = 1/((1/G) + 1/(CI))
+
+# Types of curcuits #
+circuit = ['Open','Short','100 Ohm']
+short_R = 0
+open_R = 10**40
+
+
+## An empty list to append the voltages and currents for each curcuit configuration
+Cable_I = []
+CC = []
+CNV = []
+Cable_V = []
+
+
+###########################################################################
+### Matrix Generation to be generated to encode the system of equations ###
+###########################################################################
+
+
+Load_R = np.linspace(0,100, cell_n)
+V = np.zeros(cell_n, dtype = complex) # the b in our equation Rx = V
+V[0] = U0
+Res = []
+for i in range(cell_n):         ##  creating an array with the currents(unknown) we looking at in the range, from 0 to 499
+    if i == 0:                  ##  First cell working with current I_0
+        row = np.zeros(cell_n, dtype = complex)
+        LRcur = Ri + LR + GC
+        GCcur = -GC
+        row[i] = LRcur          ##  first entry going around loop in first cell with currents I_0
+        row[i + 1] = GCcur      ##  Next with currents I_1
+
+    elif i == cell_n - 1:
+        row = np.zeros(cell_n, dtype = complex)
+        LRcur = GC + Load_R[i]
+        GCcur = -GC
+        row[i] = LRcur
+        row[i - 1] = GCcur
+        
+    else:
+        row = np.zeros(cell_n, dtype = complex)
+        LRcur = LR + 2*GC
+        GCcur = -GC
+        row[i] = LRcur
+        row[i - 1] = GCcur
+        row[i + 1] = GCcur
+    Res.append(row)
+
+current = np.linalg.solve(Res,V)
+print(current.shape)
+
+Nv = []
+Av = [U0]
+i = 0
+for i in range(cell_n):
+        if i == 0:
+            V1 = U0 - current[i]*(Ri + LR)
+            Nv.append(V1)
+            Av.append(V1)
+        elif i == (cell_n - 1):
+            pass
+        else:
+            V1 = Nv[i-1] - current[i]*LR
+            Nv.append(V1)
+            Av.append(V1)
+
+Cable_I.append(current)
+Cable_V.append(Av)
+# print(Cable_V)
+
+V_max = np.max(Cable_V)
+V_min = np.min(Cable_V)
+
+diff = np.array(V_max) - np.array(V_min)
+print(diff)

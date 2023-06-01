@@ -1,0 +1,62 @@
+import numpy as np
+import scipy as sp
+import math as m
+from time import perf_counter
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit as cf
+import scipy.integrate as integrate
+import magpylib as magpy
+
+# DEFINING THEM CONSTANTS
+J = 2.274   # Am^-2
+mu_0 = 12.5663706e-7
+c = mu_0/(4*np.pi)
+r_pos = np.array([0.029, 0.030676, 0.040262, 0.046325])
+##########################################################
+# (A) WE CALCULATE THE MAGNETIC FIELD AT DIFFERENT POINTS.
+##########################################################
+def magnetic(r):    # We define a function that calculates the magnetic field at any given point.
+    f = lambda theta, r, z: (np.sin(theta))/r
+    B = integrate.tplquad(f, 0, 2*np.pi, 0.001, r, 0, 0.06)
+    return B
+mag = magnetic(0.03)
+loc = []
+for r in r_pos:
+    b = magnetic(r)
+    loc.append(b)
+
+print("Magnetic field at the center of the solenoid is:\n", loc[0], "T")
+print("Magnetic field at the inner boundary in the middle of the solenoid:\n", loc[1], "T")
+print("Magnetic field at a point 0.04m outside the solenoid is:\n", loc[2], "T")
+print("Magnetic field at a point 0.05m outside the solenoid is:\n", loc[3], "T")
+
+#####################################################################
+# (B) WE CALCULATE AND VISUALIZE THE MAGNETIC FIELD AT ALL POSITIONS.
+#####################################################################
+
+# We create our hallow cylinder/solenoid.
+s1 = magpy.magnet.Cylinder(magnetization = (0,0,1000), dimension = (50,60)) # We define the dimensions of the outer cyliner in mm.
+s2 = magpy.magnet.Cylinder(magnetization = (0,0,-1000), dimension = (20,60)) # We define the dimentions of the inner cylinder in mm.
+c = magpy.Collection(s1,s2)
+magpy.show(c, backend='plotly', animation=3)
+
+initial_t = perf_counter()
+# We create positions for all space.
+xs = np.linspace(-100,100,100)
+zs = np.linspace(-100,100,100)
+posis = [[x,0,z] for z in zs for x in xs]
+
+# We calculate and plot the amplitude of the magnetic field and the field lines.
+B = [c.getB(pos) for pos in posis]
+Bs = np.array(B).reshape([100,100,3]) #reshape
+Bamp = np.linalg.norm(Bs,axis=2)
+X,Z = np.meshgrid(xs,zs)
+plt.pcolor(xs,zs,Bamp,cmap='jet',vmin=-200)
+U,V = Bs[:,:,0], Bs[:,:,2]
+plt.streamplot(X,Z,U,V,color='k',density=2)
+plt.ylabel("z [mm]")
+plt.xlabel("y [mm]")
+plt.show()
+final_t = perf_counter()
+del_t = final_t - initial_t
+print("THE EXECUTION TIME FOR THE MAGNETIC FIELD IN ALL POSITIONS IS:\n", del_t)

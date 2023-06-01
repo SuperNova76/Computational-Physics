@@ -1,0 +1,71 @@
+import numpy as np
+import scipy.sparse as sp
+import scipy.sparse.linalg as spla
+import matplotlib.pyplot as plt
+
+# Define the mesh
+N = 100  # number of points in each direction
+xmin, xmax, ymin, ymax = -5, 5, -5, 5
+h = (xmax - xmin) / (N - 1)
+x = np.linspace(xmin, xmax, N)
+y = np.linspace(ymin, ymax, N)
+xx, yy = np.meshgrid(x, y)
+
+# Define the charge density
+q = 1
+xq, yq = 1, 0
+sigma = q / h**2 / (4 * np.pi)
+
+# Define the boundary conditions
+V = np.zeros((N, N))
+V[0, :] = 0  # top boundary
+V[-1, :] = 0  # bottom boundary
+V[:, 0] = 0  # left boundary
+V[:, -1] = 0  # right boundary
+
+# Assemble the stiffness matrix and load vector
+A = sp.lil_matrix((N**2, N**2))
+b = np.zeros(N**2)
+for i in range(1, N - 1):
+    for j in range(1, N - 1):
+        k = i * N + j
+        A[k, k] = -4 / h**2
+        A[k, (i-1)*N+j] = 1 / h**2
+        A[k, (i+1)*N+j] = 1 / h**2
+        A[k, i*N+j-1] = 1 / h**2
+        A[k, i*N+j+1] = 1 / h**2
+        b[k] = -sigma * np.exp(-((x[j] - xq)**2 + (y[i] - yq)**2) / 0.001)
+
+# Solve the system using sparse LU decomposition
+A = A.tocsr()
+V_inner = spla.spsolve(A, b)
+V = np.zeros((N, N))
+V[1:-1, 1:-1] = V_inner.reshape((N-2, N-2))
+
+# Compute the electric field
+Ex, Ey = np.gradient(V, h)
+E = np.sqrt(Ex**2 + Ey**2)
+phi = np.arctan2(Ey, Ex)
+
+# Plot the potential, electric field magnitude, and electric field direction
+plt.figure(figsize=(12, 4))
+plt.subplot(131)
+plt.imshow(V, origin='lower', extent=[xmin, xmax, ymin, ymax], cmap='coolwarm')
+plt.colorbar()
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Potential')
+
+plt.subplot(132)
+plt.imshow(E, origin='lower', extent=[xmin, xmax, ymin, ymax], cmap='coolwarm')
+plt.colorbar()
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Electric Field Magnitude')
+
+plt.subplot(133)
+plt.quiver(xx, yy, Ex, Ey, phi, cmap='hsv')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Electric Field Direction')
+plt.show()
